@@ -150,6 +150,7 @@ class Grid:
         highlight: bool = False,
         tile_size: int = TILE_PIXELS,
         subdivs: int = 3,
+        color=(255, 0, 0),
     ) -> np.ndarray:
         """
         Render a tile and cache the result
@@ -183,7 +184,7 @@ class Grid:
 
             # Rotate the agent based on its direction
             tri_fn = rotate_fn(tri_fn, cx=0.5, cy=0.5, theta=0.5 * math.pi * agent_dir)
-            fill_coords(img, tri_fn, (255, 0, 0))
+            fill_coords(img, tri_fn, color)
 
         # Highlight the cell if needed
         if highlight:
@@ -232,6 +233,73 @@ class Grid:
                     highlight=highlight_mask[i, j],
                     tile_size=tile_size,
                 )
+
+                ymin = j * tile_size
+                ymax = (j + 1) * tile_size
+                xmin = i * tile_size
+                xmax = (i + 1) * tile_size
+                img[ymin:ymax, xmin:xmax, :] = tile_img
+
+        return img
+
+    def render(
+        self,
+        tile_size: int,
+        agent_pos: tuple[int, int],
+        agent_dir: int | None = None,
+        observed_agent_pos: tuple[int, int] | None = None,
+        observed_agent_dir: int | None = None,
+        highlight_mask: np.ndarray | None = None,
+    ) -> np.ndarray:
+        """
+        Render this grid at a given scale
+        :param r: target renderer object
+        :param tile_size: tile size in pixels
+        """
+
+        if highlight_mask is None:
+            highlight_mask = np.zeros(shape=(self.width, self.height), dtype=bool)
+
+        # Compute the total grid size
+        width_px = self.width * tile_size
+        height_px = self.height * tile_size
+
+        img = np.zeros(shape=(height_px, width_px, 3), dtype=np.uint8)
+
+        # Render the grid
+        for j in range(0, self.height):
+            for i in range(0, self.width):
+                cell = self.get(i, j)
+
+                agent_here = np.array_equal(agent_pos, (i, j))
+                observed_agent_here = np.array_equal(observed_agent_pos, (i, j))
+
+                assert highlight_mask is not None
+                if agent_here:
+                    tile_img = Grid.render_tile(
+                        cell,
+                        agent_dir=agent_dir,
+                        highlight=highlight_mask[i, j],
+                        tile_size=tile_size,
+                        color=(255, 0, 0),
+                    )
+                elif observed_agent_here:
+                    tile_img = Grid.render_tile(
+                        cell,
+                        agent_dir=observed_agent_dir if observed_agent_here else None,
+                        highlight=np.zeros(shape=(self.width, self.height), dtype=bool)[
+                            i, j
+                        ],
+                        tile_size=tile_size,
+                        color=(0, 0, 255),
+                    )
+                else:
+                    tile_img = Grid.render_tile(
+                        cell,
+                        agent_dir=None,
+                        highlight=highlight_mask[i, j],
+                        tile_size=tile_size,
+                    )
 
                 ymin = j * tile_size
                 ymax = (j + 1) * tile_size
