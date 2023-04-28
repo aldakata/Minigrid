@@ -8,7 +8,7 @@ from gymnasium import Env
 
 from minigrid.core.actions import Actions
 from minigrid.minigrid_env import MiniGridEnv
-from minigrid.minigrid_wrapper import NoisyObservation
+from minigrid.noisy_wrapper import NoisyObservation
 from minigrid.wrappers import ImgObsWrapper, RGBImgPartialObsWrapper, SymbolicObsWrapper
 
 
@@ -136,6 +136,6 @@ if __name__ == "__main__":
         env = RGBImgPartialObsWrapper(env, args.tile_size)
         env = ImgObsWrapper(env)
 
-    env = NoisyObservation(env)
+    env = NoisyObservation(env, is_stochastic=True)
     manual_control = ManualControl(env, seed=args.seed)
     manual_control.start()
