@@ -18,24 +18,25 @@ from minigrid.core.world_object import Point, WorldObj
 import pygame
 import numpy as np
 import math
-import minigrid.core.actions
+import random
 
 
 class NoisyObservation(Wrapper):
     def __init__(self, env, d=2, noise=0):
-        """A wrapper that always regenerate an environment with the same set of seeds.
+        """
+        A wrapper that encodes a noisy observation of the actual agent.
 
         Args:
             env: The environment to apply the wrapper
-            seeds: A list of seed to be applied to the env
-            seed_idx: Index of the initial seed in seeds
+            d: diameter of noise?
+            noise: probability of observing wrong action.
         """
         super().__init__(env)
 
         # Current position and direction of the agent
         self.observed_agent_dir: np.ndarray | tuple[int, int] = None
         self.observed_agent_pos: int = None
-        self.d = d  # Diameter of noise
+        self.d = d
         self.noise = noise
 
     def place_agent(self, top=None, size=None, rand_dir=True, max_tries=math.inf):
@@ -56,9 +57,7 @@ class NoisyObservation(Wrapper):
     ) -> tuple[ObsType, dict[str, Any]]:
         ret = super().reset(seed=seed)
         self.observed_agent_dir = self.env.agent_dir
-        self.observed_agent_pos = self.env.place_obj(
-            None, self.env.agent_pos, (self.d, self.d), max_tries=20
-        )
+        self.observed_agent_pos = self.env.agent_pos
         return ret
 
     @property
@@ -90,33 +89,49 @@ class NoisyObservation(Wrapper):
 
         return self.observed_agent_pos + self.observed_dir_vec
 
+    def get_noisy_action(self, action):
+        movement_actions = [Actions.left, Actions.right, Actions.forward]
+        if action not in movement_actions:
+            return action
+        weights = [1 - self.noise, self.noise / 2.0, self.noise / 2.0]
+
+        return random.choices(
+            [action] + [a for a in movement_actions if a != action], weights=weights
+        )[0]
+
     def step(
         self, action: ActType
     ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
         """
-        Step
+        Step according to self.noise, noise only affects Left, Forward, Right.
+        TODO: Inject noise for other actions.
         """
-        if action in [actions]
+        # if action in [actions]
         ret = super().step(action)
+
         # Get the position in front of the agent
         fwd_pos = self.observed_front_pos
 
         # Get the contents of the cell in front of the agent
         fwd_cell = self.grid.get(*fwd_pos)
 
+        # Inject noise
+        noisy_action = self.get_noisy_action(action)
+        print(
+            f"Action {action} | Noisy action {noisy_action} debug {self.env.actions.left}"
+        )
         # Rotate left
-        if action == self.env.actions.left:
+        if noisy_action == self.env.actions.left:
             self.observed_agent_dir -= 1
             if self.observed_agent_dir < 0:
                 self.observed_agent_dir += 4
 
         # Rotate right
-        elif action == self.env.actions.right:
+        elif noisy_action == self.env.actions.right:
             self.observed_agent_dir = (self.observed_agent_dir + 1) % 4
 
         # Move forward
-        elif action == self.env.actions.forward:
-            print("jeje forward!!")
+        elif noisy_action == self.env.actions.forward:
             if fwd_cell is None or fwd_cell.can_overlap():
                 self.observed_agent_pos = tuple(fwd_pos)
                 print("1")
@@ -128,27 +143,6 @@ class NoisyObservation(Wrapper):
                 terminated = True
                 print("3")
 
-        # Pick up an object
-        # elif action == self.actions.pickup:
-        #     if fwd_cell and fwd_cell.can_pickup():
-        #         if self.carrying is None:
-        #             self.carrying = fwd_cell
-        #             self.carrying.cur_pos = np.array([-1, -1])
-        #             self.grid.set(fwd_pos[0], fwd_pos[1], None)
-
-        # Drop an object
-        # elif action == self.actions.drop:
-        #     if not fwd_cell and self.carrying:
-        #         self.grid.set(fwd_pos[0], fwd_pos[1], self.carrying)
-        #         self.carrying.cur_pos = fwd_pos
-        #         self.carrying = None
-
-        # Toggle/activate an object
-        # elif action == self.env.actions.toggle:
-        #     if fwd_cell:
-        #         fwd_cell.toggle(self, fwd_pos)
-
-        # Done action (not used by default)
         elif action == self.env.actions.done:
             pass
 
@@ -156,75 +150,6 @@ class NoisyObservation(Wrapper):
             print(f"Unknown action: {action}")
             # raise ValueError(f"Unknown action: {action}")
         return ret
-
-    def stochastic_transition(self, action):
-
-        reward = 0
-        terminated = False
-        truncated = False
-
-        # Get the position in front of the agent
-        fwd_pos = self.env.front_pos
-
-        # Get the contents of the cell in front of the agent
-        fwd_cell = self.env.grid.get(*fwd_pos)
-
-        # Rotate left
-        if action == self.env.actions.left:
-            self.agent_dir -= 1
-            if self.agent_dir < 0:
-                self.agent_dir += 4
-
-        # Rotate right
-        elif action == self.env.actions.right:
-            self.agent_dir = (self.agent_dir + 1) % 4
-
-        # Move forward
-        elif action == self.env.actions.forward:
-            if fwd_cell is None or fwd_cell.can_overlap():
-                self.agent_pos = tuple(fwd_pos)
-            if fwd_cell is not None and fwd_cell.type == "goal":
-                terminated = True
-                reward = self._reward()
-            if fwd_cell is not None and fwd_cell.type == "lava":
-                terminated = True
-
-        # Pick up an object
-        elif action == self.env.actions.pickup:
-            if fwd_cell and fwd_cell.can_pickup():
-                if self.carrying is None:
-                    self.carrying = fwd_cell
-                    self.carrying.cur_pos = np.array([-1, -1])
-                    self.grid.set(fwd_pos[0], fwd_pos[1], None)
-
-        # Drop an object
-        elif action == self.end.actions.drop:
-            if not fwd_cell and self.carrying:
-                self.grid.set(fwd_pos[0], fwd_pos[1], self.carrying)
-                self.carrying.cur_pos = fwd_pos
-                self.carrying = None
-
-        # Toggle/activate an object
-        elif action == self.env.actions.toggle:
-            if fwd_cell:
-                fwd_cell.toggle(self, fwd_pos)
-
-        # Done action (not used by default)
-        elif action == self.env.actions.done:
-            pass
-
-        else:
-            raise ValueError(f"Unknown action: {action}")
-
-        if self.env.step_count >= self.env.max_steps:
-            truncated = True
-
-        if self.env.render_mode == "human":
-            self.render()
-
-        obs = self.env.gen_obs()
-
-        return obs, reward, terminated, truncated, {}
 
     def get_full_render(self, highlight, tile_size):
         """

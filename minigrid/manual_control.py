@@ -90,7 +90,7 @@ if __name__ == "__main__":
         type=str,
         help="gym environment to load",
         choices=gym.envs.registry.keys(),
-        default="MiniGrid-Empty-5x5-v0",
+        default="MiniGrid-Empty-8x8-v0",
     )
     parser.add_argument(
         "--seed",
@@ -136,6 +136,6 @@ if __name__ == "__main__":
         env = RGBImgPartialObsWrapper(env, args.tile_size)
         env = ImgObsWrapper(env)
 
-    env = NoisyObservation(env, is_stochastic=True)
+    env = NoisyObservation(env, noise=0.1)
     manual_control = ManualControl(env, seed=args.seed)
     manual_control.start()
